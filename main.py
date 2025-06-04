@@ -7,7 +7,7 @@ Purpose: To obtain a better understanding of AI agents, including their interact
 from typing import Optional, Literal
 from pydantic import BaseModel, Field
 from ollama import chat
-import logging
+import logging, copy
 
 # Set up logging configuration
 logging.basicConfig(
@@ -20,6 +20,14 @@ logger = logging.getLogger(__name__)
 # Variable Definitions
 MODEL = "llama3.1"
 # TOOLS = [search_tool, wiki_tool, summary_tool]
+SYSTEM_PROMPT = [
+    {
+        "role": "system",
+        "content": """\
+You are a research assistant that will help generate a research paper.
+Answer the user query and use neccessary tools.""",
+    },
+]
 
 # Data model definitions
 
@@ -30,26 +38,21 @@ MODEL = "llama3.1"
 # Main Functionality
 
 
-def main(user_input: str = "") -> str:
+def main(user_input: str = "", messages: list[dict] = SYSTEM_PROMPT) -> str:
     """Main function to run the research assistant."""
     logger.debug("Starting the research assistant...")
 
     if user_input == "":
         return "Please provide a question or topic to research."
 
+    messages.append({"role": "user", "content": user_input})
+
     try:
         response = chat(
             MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": """\
-                    You are a research assistant that will help generate a research paper. 
-                    Answer the user query and use neccessary tools.""",
-                },
-                {"role": "user", "content": user_input},
-            ],
+            messages=messages,
         )
+        messages.append({"role": "assistant", "content": response.message.content})
         return response.message.content
 
     except Exception as e:
@@ -60,15 +63,18 @@ def main(user_input: str = "") -> str:
 # Operating Loop
 
 if __name__ == "__main__":
+    messages = copy.deepcopy(SYSTEM_PROMPT)
     while True:
         try:
             user_input = input("Enter your question (type 'exit' to quit): ")
             if user_input.lower() == "exit" or user_input.lower() == "quit":
                 logger.info("Exiting the research assistant.")
+                print(SYSTEM_PROMPT)
+                print(messages)
                 break
 
             # Process the user input
-            response = main(user_input=user_input)
+            response = main(user_input=user_input, messages=messages)
             print(response)
 
         except KeyboardInterrupt:
