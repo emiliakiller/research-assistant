@@ -7,7 +7,7 @@ Purpose: To obtain a better understanding of AI agents, including their interact
 from typing import Optional, Literal
 from pydantic import BaseModel, Field
 from ollama import chat
-import logging, copy
+import logging, copy, datetime
 
 # Set up logging configuration
 logging.basicConfig(
@@ -38,7 +38,16 @@ Answer the user query, use necessary tools, and always provide sources or refere
 # Main Functionality
 
 
-def main(user_input: str = "", messages: list[dict] = SYSTEM_PROMPT) -> str:
+def save_to_report(user_input: str, assistant_response: str, report_path: str = "research_report.md"):
+    """Append the latest Q&A to a markdown report file, including a timestamp."""
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with open(report_path, "a", encoding="utf-8") as f:
+        f.write(f"### Timestamp: {timestamp}\n\n")
+        f.write(f"## Question\n{user_input}\n\n")
+        f.write(f"## Answer\n{assistant_response}\n\n---\n\n")
+
+
+def main(user_input: str = "", messages: list[dict] = SYSTEM_PROMPT, report_path: str = "research_report.md") -> str:
     """Main function to run the research assistant."""
     logger.debug("Starting the research assistant...")
 
@@ -53,6 +62,8 @@ def main(user_input: str = "", messages: list[dict] = SYSTEM_PROMPT) -> str:
             messages=messages,
         )
         messages.append({"role": "assistant", "content": response.message.content})
+        # Save Q&A to report after each response
+        save_to_report(user_input, response.message.content, report_path=report_path)
         return response.message.content
 
     except Exception as e:
@@ -64,6 +75,9 @@ def main(user_input: str = "", messages: list[dict] = SYSTEM_PROMPT) -> str:
 
 if __name__ == "__main__":
     messages = copy.deepcopy(SYSTEM_PROMPT)
+    report_path = input("Enter a filename for your research report (default: research_report.md): ").strip()
+    if not report_path:
+        report_path = "research_report.md"
     while True:
         try:
             user_input = input("Enter your question (type 'exit' to quit): ")
@@ -74,7 +88,7 @@ if __name__ == "__main__":
                 break
 
             # Process the user input
-            response = main(user_input=user_input, messages=messages)
+            response = main(user_input=user_input, messages=messages, report_path=report_path)
             print(response)
 
         except KeyboardInterrupt:
