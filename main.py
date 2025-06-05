@@ -7,7 +7,7 @@ Purpose: To obtain a better understanding of AI agents, including their interact
 from typing import Optional, Literal
 from pydantic import BaseModel, Field
 from ollama import chat
-import logging, copy, datetime
+import logging, copy, datetime, json
 
 # Set up logging configuration
 logging.basicConfig(
@@ -47,12 +47,42 @@ def save_to_report(user_input: str, assistant_response: str, report_path: str = 
         f.write(f"## Answer\n{assistant_response}\n\n---\n\n")
 
 
+def save_session(messages, session_path="session.json"):
+    """Save the current conversation history to a JSON file."""
+    with open(session_path, "w", encoding="utf-8") as f:
+        json.dump(messages, f, ensure_ascii=False, indent=2)
+
+
+def load_session(session_path="session.json"):
+    """Load conversation history from a JSON file."""
+    try:
+        with open(session_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
 def main(user_input: str = "", messages: list[dict] = SYSTEM_PROMPT, report_path: str = "research_report.md") -> str:
     """Main function to run the research assistant."""
     logger.debug("Starting the research assistant...")
 
     if user_input == "":
         return "Please provide a question or topic to research."
+    if user_input.strip() == "/summary":
+        # Generate a summary of the session
+        summary_prompt = "Summarize the research session so far, including key findings and sources."
+        messages.append({"role": "user", "content": summary_prompt})
+        try:
+            response = chat(
+                MODEL,
+                messages=messages,
+            )
+            messages.append({"role": "assistant", "content": response.message.content})
+            save_to_report(summary_prompt, response.message.content, report_path=report_path)
+            return f"Session summary appended to report.\n\n{response.message.content}"
+        except Exception as e:
+            logger.error(f"An error occurred: {e}")
+            return "An error occurred while generating the summary. Please try again."
 
     messages.append({"role": "user", "content": user_input})
 
@@ -78,19 +108,32 @@ if __name__ == "__main__":
     report_path = input("Enter a filename for your research report (default: research_report.md): ").strip()
     if not report_path:
         report_path = "research_report.md"
+    session_path = input("Enter a session filename to load (or press Enter to start new): ").strip()
+    if session_path:
+        loaded = load_session(session_path)
+        if loaded:
+            messages = loaded
+            print(f"Loaded session from {session_path}.")
+        else:
+            print(f"Could not load session from {session_path}, starting new session.")
     while True:
         try:
-            user_input = input("Enter your question (type 'exit' to quit): ")
+            user_input = input("Enter your question (type 'exit' to quit, '/summary' for session summary, '/save' to save session): ")
             if user_input.lower() == "exit" or user_input.lower() == "quit":
                 logger.info("Exiting the research assistant.")
                 print(SYSTEM_PROMPT)
                 print(messages)
                 break
-
+            if user_input.strip() == "/save":
+                session_path = input("Enter a filename to save the session (default: session.json): ").strip()
+                if not session_path:
+                    session_path = "session.json"
+                save_session(messages, session_path)
+                print(f"Session saved to {session_path}.")
+                continue
             # Process the user input
             response = main(user_input=user_input, messages=messages, report_path=report_path)
             print(response)
-
         except KeyboardInterrupt:
             logger.info("Keyboard interrupt received. Exiting...")
             break
